@@ -1,5 +1,6 @@
 #include "init.h"
-
+#include "bmpfuncs.h"
+#include <stdlib.h>
 //lab 1
 /*
 void runCL(oclC*);
@@ -273,6 +274,7 @@ void runCL(oclC* device) {
 	return 0;
 }
 */
+//oef 3
 /*
 #include <time.h>
 #include <stdlib.h>
@@ -329,8 +331,6 @@ void runCL(oclC* device) {
 	clReleaseMemObject(buffer);
 	return 0;
 }*/
-#include "bmpfuncs.h"
-#include <stdlib.h>
 void runCL(oclC*);
 int main() {
 	cl_uint err = 0;
@@ -363,11 +363,11 @@ void runCL(oclC* device) {
 	image = readImage("input.bmp", &width, &height);
 	float *image_r;
 	image_r = malloc(sizeof(float) * height * width);
-	float filter[] = {
-					1,0,-1,
-					2,0,-2,
-					1,0,1};
-	int filer_s = sizeof(filter);
+	int filter[] = {
+					-1,-2,-1,
+					0,0,0,
+					1,2,1};
+	int filter_s = 9;
 	cl_image_desc desc;
 	desc.image_type = CL_MEM_OBJECT_IMAGE2D;
 	desc.image_width = width;
@@ -382,36 +382,59 @@ void runCL(oclC* device) {
 	format.image_channel_order = CL_R;
 	format.image_channel_data_type = CL_FLOAT;
 	//create the images
-	cl_mem sourceImage = clCreateImage(device->oclContext, CL_MEM_READ_ONLY, &format, &desc, NULL, &err);
-	printf("%d\n", err);
+	cl_mem sourceImage = clCreateImage(device->oclContext, CL_MEM_READ_ONLY, &format, &desc, NULL, &err); 
+	//printf("%d", err);
+	//printf("%d\n", err);
 	cl_mem result = clCreateImage(device->oclContext, CL_MEM_WRITE_ONLY, &format, &desc, NULL, &err);
-	cl_mem filter_buffer = clCreateImage(device->oclContext, CL_MEM_READ_ONLY,&format,&desc,filter, &err);
-	//and the buffers
-	cl_mem filer_size = clCreateBuffer(device->oclContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int), &filer_s, &err);
-	cl_mem height_buffer = clCreateBuffer(device->oclContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int), &height, &err);
-	cl_mem width_buffer = clCreateBuffer(device->oclContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(int), &width, &err);
+	//printf("%d", err);
+	cl_mem filter_buffer = clCreateBuffer(device->oclContext, CL_MEM_READ_ONLY, sizeof(filter), filter, &err);
+	err = clEnqueueWriteBuffer(device->oclCommQueue, filter_buffer, CL_TRUE, 0, sizeof(filter), filter, NULL, NULL, NULL);
+	//printf("%d", err);
 	size_t origin[3] = { 0, 0, 0 };
 	size_t region[3] = { width, height, 1};
 	//read in the source image
-	clEnqueueWriteImage(device->oclCommQueue, sourceImage, CL_TRUE, origin, region, 0, 0, image, 0, NULL, NULL); //crashes here
+	clEnqueueWriteImage(device->oclCommQueue, sourceImage, CL_TRUE, origin, region, 0, 0, image, 0, NULL, NULL);
 	//create the sampler
-	cl_sampler_properties prop[7] = { CL_FALSE, CL_ADDRESS_CLAMP_TO_EDGE,CL_FILTER_NEAREST,0 };
-	cl_sampler sampler = clCreateSamplerWithProperties(device->oclContext, prop, NULL); //and here
+	//cl_sampler_properties prop[7] = {CL_FALSE, CL_ADDRESS_CLAMP_TO_EDGE,CL_FILTER_NEAREST,0};
+	//cl_sampler sampler = clCreateSamplerWithProperties(device->oclContext, prop, NULL);
 	err = clBuildProgram(device->oclProgram, 1, &device->oclDevice, NULL, NULL, NULL);
+	printf("%d", err);
+	if (err == CL_BUILD_PROGRAM_FAILURE) {
+		// Determine the size of the log
+		size_t log_size;
+		clGetProgramBuildInfo(device->oclProgram, device->oclDevice, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+		// Allocate memory for the log
+		char* log = (char*)malloc(log_size);
+
+		// Get the log
+		clGetProgramBuildInfo(device->oclProgram, device->oclDevice, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+		// Print the log
+		printf("%s\n", log);
+	}
 	//create kernel
 	kernel = clCreateKernel(device->oclProgram, "sobel", &err);
+	//printf("%d", err);
 	//set the args
 	err = clSetKernelArg(kernel, 0, sizeof(sourceImage), (void*)&sourceImage);
 	err = clSetKernelArg(kernel, 1, sizeof(result), (void*)&result);
-	err = clSetKernelArg(kernel, 2, sizeof(height_buffer), (void*)&height_buffer);
-	err = clSetKernelArg(kernel, 3, sizeof(width_buffer), (void*)&width_buffer);
+	err = clSetKernelArg(kernel, 2, sizeof(int), (void*)&height);
+	err = clSetKernelArg(kernel, 3, sizeof(int), (void*)&width);
 	err = clSetKernelArg(kernel, 4, sizeof(filter_buffer), (void*)&filter_buffer);
-	err = clSetKernelArg(kernel, 5, sizeof(filer_size), (void*)&filer_size);
-	//err = clSetKernelArg(kernel, 6, sizeof(cl_sampler), (void*)&sampler);
+	err = clSetKernelArg(kernel, 5, sizeof(int), (void*)&filter_s);
 	//start the kernel
 	int number = width * height;
-	err = clEnqueueNDRangeKernel(device->oclCommQueue, kernel, 1, 0, (const size_t*)&number, 0, 0, NULL, NULL);
+	size_t global[] = { width,height };
+	err = clEnqueueNDRangeKernel(device->oclCommQueue, kernel, 2, 0, global, 0, 0, NULL, NULL);
+	//printf("%d", err);
 	//read the image
 	err = clEnqueueReadImage(device->oclCommQueue, result, CL_TRUE, origin, region, 0, 0, image_r, NULL,NULL,NULL);
-	printf('done');
+	storeImage(image_r, "output.bmp", height, width, "input.bmp");
+	clReleaseKernel(kernel);
+	clReleaseMemObject(result);
+	clReleaseMemObject(filter_buffer);
+	clReleaseMemObject(sourceImage);
+	return 0;
+
 }

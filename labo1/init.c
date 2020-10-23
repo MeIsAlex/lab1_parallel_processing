@@ -16,7 +16,7 @@ char* readSource(char*filename) {
 	char* source = NULL;
 	int length = 0;
 	FILE* f = NULL;
-	f = fopen("helloworld.cl", "rb");
+	f = fopen(filename, "rb");
 
 	fseek(f,0, SEEK_END);
 	length = ftell(f);
