@@ -4,7 +4,7 @@ __kernel void sobel(
 __read_only image2d_t sourceImage,
 __write_only image2d_t outputImage,
 int rows,int cols,
-__global int* filter,int filterWidth
+__local int* filter,int filterWidth
 ){
 	int col = get_global_id(0);
 	int row = get_global_id(1);
@@ -25,5 +25,27 @@ __global int* filter,int filterWidth
 		coords2.x = col;
 		coords2.y = row;
 		write_imagef(outputImage, coords2, sum);
+	}
+}
+__kernel void scale(
+	__read_only image2d_t sourceImage,
+	__write_only image2d_t outputImage,
+	int scale
+) {
+	int col = get_global_id(0);
+	int row = get_global_id(1);
+	int2 coords;
+	coords.x = col;
+	coords.y = row;
+	float4 pxl;
+	pxl = read_imagef(sourceImage, sampler, coords);
+	for (int i = 0; i < scale; i++) {
+		coords.y = row *scale;
+		coords.y = coords.y +i;
+		for (int j = 0; j < scale; j++) {
+			coords.x = col *scale;
+			coords.x = coords.x +j;
+			write_imagef(outputImage, coords, pxl);
+		}
 	}
 }

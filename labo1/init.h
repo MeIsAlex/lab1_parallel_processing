@@ -1,5 +1,8 @@
 #pragma once
 #include <CL\opencl.h>
+//VC++directories\library direcories -> D:\openCL\lib;$(LibraryPath)
+//C C++/General\additioanl include directories -> D:\openCL\include;%(AdditionalIncludeDirectories)
+//linker/all options/additional dependecies opencl.lib;%(AdditionalDependencies)
 #include <stdio.h>
 #include <stdlib.h>
 #pragma once
