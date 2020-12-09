@@ -32,12 +32,18 @@
     <ClInclude Include="bmpfuncs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="timer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="helloworld.cl">
       <Filter>Source Files</Filter>
     </None>
     <None Include="image.cl">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="nbody.cl">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

@@ -149,10 +149,12 @@
   <ItemGroup>
     <ClInclude Include="bmpfuncs.h" />
     <ClInclude Include="init.h" />
+    <ClInclude Include="timer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="helloworld.cl" />
     <None Include="image.cl" />
+    <None Include="nbody.cl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="input.bmp" />

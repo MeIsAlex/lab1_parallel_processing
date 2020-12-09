@@ -464,7 +464,7 @@ void runCL(oclC* device) {
 	clReleaseMemObject(sourceImage);
 	return 0;
 }*/
-void runCL(oclC*);
+/*void runCL(oclC*);
 int main() {
 	cl_uint err = 0;
 	cl_uint platforms = 0;
@@ -571,4 +571,113 @@ void runCL(oclC* device) {
 	clReleaseMemObject(result);
 	clReleaseMemObject(sourceImage);
 	return 0;
+}*/
+#include "timer.h"
+void runCL(oclC*);
+void randomizeBodies(float*, int);
+typedef struct { float x, y, z, vx, vxy, vz; } Body;
+int main() {
+	cl_uint err = 0;
+	cl_uint platforms = 0;
+	cl_uint devices = 0;
+	char* source = NULL;
+	cl_platform_id* availablePlatforms = NULL;
+	cl_device_id* availableDevices = NULL;
+	oclC deviceconst;
+	char platformName[150];
+	getplatforms(&platforms, &availablePlatforms);
+	for (uint32_t i = 0; i < 2; i++)
+	{
+		err = clGetPlatformInfo(availablePlatforms[i], CL_PLATFORM_NAME, 150, platformName, NULL);
+		printf("platform %s", platformName);
+	}
+	getids(availablePlatforms[0], &devices, &availableDevices);
+	source = readSource("nbody.cl");
+	deviceconst.oclDevice = availableDevices[0];
+	setupCL(&deviceconst, source);
+	runCL(&deviceconst);
+	return 0;
+}
+void runCL(oclC* device) {
+	int nBodies = 100000;
+	float dt = 0.01f;
+	int nIters = 10;
+	int bytes = (nBodies * sizeof(cl_float4));
+	float* buf1 = (float*)malloc(bytes);
+	float* buf2 = (float*)malloc(bytes);
+	cl_float4* pos = (cl_float4*)buf1;
+	cl_float4* vel = (cl_float4*)buf1;
+	cl_float4* posRes = (cl_float4*)malloc(bytes);
+	cl_float4* velRes = (cl_float4*)malloc(bytes);
+	randomizeBodies(buf1, 4 * nBodies);
+	randomizeBodies(buf2, 4 * nBodies);
+	cl_uint err = 0;
+	cl_kernel kernel;
+	cl_mem bufferPos;
+	cl_mem bufferVel;
+	cl_mem bufferPosRes;
+	cl_mem bufferVelRes;
+	//read in the source image
+	for (int i = 0; i < nIters; i++)
+	{
+		StartTimer();
+		bufferPos = clCreateBuffer(device->oclContext, CL_MEM_READ_WRITE, bytes, NULL, &err);
+		bufferVel = clCreateBuffer(device->oclContext, CL_MEM_READ_WRITE, bytes, NULL, &err);
+
+		bufferPosRes = clCreateBuffer(device->oclContext, CL_MEM_READ_WRITE, bytes, NULL, &err);
+		bufferVelRes = clCreateBuffer(device->oclContext, CL_MEM_READ_WRITE, bytes, NULL, &err);
+
+		err = clBuildProgram(device->oclProgram, 1, &device->oclDevice, NULL, NULL, NULL);
+		if (err == CL_BUILD_PROGRAM_FAILURE) {
+			// Determine the size of the log
+			size_t log_size;
+			clGetProgramBuildInfo(device->oclProgram, device->oclDevice, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+			// Allocate memory for the log
+			char* log = (char*)malloc(log_size);
+
+			// Get the log
+			clGetProgramBuildInfo(device->oclProgram, device->oclDevice, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+			// Print the log
+			printf("%s\n", log);
+		}
+		//create kernel
+		kernel = clCreateKernel(device->oclProgram, "nbody", &err);
+		err = clSetKernelArg(kernel, 0, sizeof(bufferPos), (void*)&bufferPos);
+		err = clSetKernelArg(kernel, 1, sizeof(bufferVel), (void*)&bufferVel);
+		err = clSetKernelArg(kernel, 2, sizeof(bufferPosRes), (void*)&bufferPosRes);
+		err = clSetKernelArg(kernel, 3, sizeof(bufferVelRes), (void*)&bufferVelRes);
+		err = clSetKernelArg(kernel, 4, sizeof(float), (void*)&dt);
+		err = clSetKernelArg(kernel, 5, sizeof(int), (void*)&nBodies);
+
+		err = clEnqueueWriteBuffer(device->oclCommQueue, bufferPos, CL_TRUE, 0, bytes, pos, NULL, NULL, NULL);
+		err = clEnqueueWriteBuffer(device->oclCommQueue, bufferVel, CL_TRUE, 0, bytes, vel, NULL, NULL, NULL);
+
+		LARGE_INTEGER freq;
+		LARGE_INTEGER starttime;
+		LARGE_INTEGER endtime;
+
+
+		err = clEnqueueNDRangeKernel(device->oclCommQueue, kernel, 1, 0, (const size_t*)&nBodies, 0, 0, NULL, NULL);
+		clFinish(device->oclCommQueue);
+		err = clEnqueueReadBuffer(device->oclCommQueue, bufferPosRes, CL_TRUE, 0, bytes, posRes, NULL, NULL, NULL);
+		err = clEnqueueReadBuffer(device->oclCommQueue, bufferVelRes, CL_TRUE, 0, bytes, velRes, NULL, NULL, NULL);
+		pos = posRes;
+		vel = velRes;
+		const double tElapsed = GetTimer() / 1000.0;
+		printf("Iteration %d: %.3f seconds\n", i, tElapsed);
+
+		clReleaseKernel(kernel);
+		clReleaseMemObject(bufferPos);
+		clReleaseMemObject(bufferVel);
+		clReleaseMemObject(bufferPosRes);
+		clReleaseMemObject(bufferVelRes);
+	}
+	return 0;
+}
+void randomizeBodies(float* data, int n) {
+	for (int i = 0; i < n; i++) {
+		data[i] = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;
+	}
 }
